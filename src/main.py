@@ -7,7 +7,8 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
-from constants import BASE_DIR, MAIN_DOC_URL, PEP_URL, STATUS_COUNT
+from constants import (BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL,
+                       PEP_URL, STATUS_COUNT)
 from outputs import control_output
 from utils import find_tag, get_response
 
@@ -90,13 +91,14 @@ def download(session):
 
 def pep(session):
     response = get_response(session, PEP_URL)
+    if response is None:
+        return
     soup = BeautifulSoup(response.text, features='lxml')
     section = find_tag(soup, 'section', attrs={'id': 'numerical-index'})
     table = find_tag(section, 'tbody')
     rows = table.find_all('tr')
     for row in tqdm(rows):
-        status_abbr = find_tag(row, 'abbr')['title']
-        status_from_table = status_abbr.split()[-1]
+        status_from_table_key = find_tag(row, 'abbr').text[1:]
         url_item = find_tag(row, 'a', attrs={
             'class': 'pep reference internal'})['href']
         url_item_full = urljoin(PEP_URL, url_item)
@@ -106,7 +108,8 @@ def pep(session):
         soup_item = BeautifulSoup(response_item.text, features='lxml')
         table_item = find_tag(soup_item, 'dl')
         status_from_page = table_item.find('abbr').text
-        if status_from_table != status_from_page:
+        status_from_table = EXPECTED_STATUS[status_from_table_key]
+        if status_from_page not in status_from_table:
             logging.info(
                 (f'Несовпадающие статусы:\n'
                  f'{url_item_full}\n'
